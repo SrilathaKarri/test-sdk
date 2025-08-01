@@ -1,16 +1,16 @@
 name: Publish SDK to Maven Central
 on:
   push:
-    branches: [ java-sdk-filters ]
+    branches: [ main ]
     paths:
-      - 'java-21/**'              
+      - 'src/**'              
       - '.github/workflows/publish.yml'
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     environment:
-        name: ${{ github.ref_name == 'java-abha-flow' && 'production' || github.ref_name == 'main' && 'staging' || 'dev' }}
+        name: ${{ github.ref_name == 'main' && 'production' || github.ref_name == 'main' && 'staging' || 'dev' }}
     
     steps:
     - name: Checkout code
@@ -25,7 +25,7 @@ jobs:
 
     # NEW: Create embedded configuration file from secrets
     - name: Create embedded configuration
-      working-directory: ./java-21/
+      working-directory: ./src/
       run: |
         mkdir -p src/main/resources
         cat > src/main/resources/sdk-embedded.properties << 'EOF'
@@ -41,7 +41,7 @@ jobs:
         
     # NEW: Verify the configuration was created (without exposing secrets)
     - name: Verify embedded configuration
-      working-directory: ./java-21/
+      working-directory: ./src/
       run: |
         if [ ! -f "src/main/resources/sdk-embedded.properties" ]; then
           echo "Error: Embedded configuration file not created!"
@@ -131,7 +131,7 @@ jobs:
 
     - name: Generate Documentation
       if: success()
-      working-directory: ./java-21/
+      working-directory: ./src/
       run: |
         echo "Generating Javadoc documentation..."
         mvn javadoc:javadoc -q
@@ -159,7 +159,7 @@ jobs:
 
     - name: Upload Documentation to S3
       if: success()
-      working-directory: ./java-21/
+      working-directory: ./src/
       run: |
         echo "Uploading documentation to S3..."
 
