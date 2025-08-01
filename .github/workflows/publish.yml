@@ -173,15 +173,18 @@ jobs:
           exit 1
         fi
     
-        # Upload with proper metadata
+        # Remove old docs
         aws s3 rm "s3://$S3_BUCKET/" --recursive
-        aws s3 cp target/site/apidocs "s3://$S3_BUCKET/" --recursive
-
+    
+        # Upload with automatic MIME type detection
+        aws s3 sync "$DOCS_DIR" "s3://$S3_BUCKET/" --delete
+    
         echo "Documentation uploaded successfully to S3 bucket: $S3_BUCKET"
-
+    
         S3_WEBSITE_URL="http://$S3_BUCKET.s3-website-${{ secrets.AWS_REGION }}.amazonaws.com"
         echo "S3_WEBSITE_URL=$S3_WEBSITE_URL" >> $GITHUB_ENV
         echo "Documentation available at: $S3_WEBSITE_URL"
+
 
 
     - name: Invalidate CloudFront Cache (Optional)
