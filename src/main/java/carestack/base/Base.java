@@ -1,11 +1,7 @@
 package carestack.base;
 
-import carestack.base.config.EmbeddedSdkProperties;
-import carestack.base.config.WebClientConfig;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
@@ -39,14 +35,14 @@ import java.util.*;
 @Service
 public abstract class Base {
 
-    @Autowired
-    private EmbeddedSdkProperties embeddedProperties;
-
-    @Autowired
-    private WebClientConfig webClientConfig;
-
-    @Value("${api.url:#{null}}")
-    private String userApiUrl;
+//    @Autowired
+//    private EmbeddedSdkProperties embeddedProperties;
+//
+//    @Autowired
+//    private WebClientConfig webClientConfig;
+//
+//    @Value("${api.url:#{null}}")
+//    private String userApiUrl;
 
     protected final ObjectMapper objectMapper;
     protected final WebClient webClient;
@@ -110,9 +106,9 @@ public abstract class Base {
      * @return A Mono containing the API response.
      */
     public <T> Mono<T> get(String relativePath, ParameterizedTypeReference<T> responseType) {
-        String fullUrl = String.format("%s%s", webClientConfig.determineApiUrl(), relativePath);
+//        String fullUrl = String.format("%s%s", webClientConfig.determineApiUrl(), relativePath);
         return webClient.get()
-                .uri(URI.create(fullUrl))
+                .uri(relativePath)
                 .retrieve()
                 .bodyToMono(responseType)
                 .onErrorMap(EhrApiError::handleAndLogApiError);
