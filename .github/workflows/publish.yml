@@ -10,8 +10,9 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     environment:
-        name: ${{ github.ref_name == 'main' && 'production' || github.ref_name == 'main' && 'staging' || 'dev' }}
-    
+      name: ${{ github.ref_name == 'main' && 'production' || 'dev' }}
+
+  
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -25,7 +26,6 @@ jobs:
 
     # NEW: Create embedded configuration file from secrets
     - name: Create embedded configuration
-      working-directory: ./src/
       run: |
         mkdir -p src/main/resources
         cat > src/main/resources/sdk-embedded.properties << 'EOF'
