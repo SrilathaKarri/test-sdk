@@ -129,23 +129,23 @@ jobs:
 
     - name: Generate Documentation
       if: success()
-      working-directory: ./src/
       run: |
         echo "Generating Javadoc documentation..."
         mvn javadoc:javadoc -q
-
+    
         if [ ! -d "target/site/apidocs" ]; then
           echo "Error: Documentation not generated - apidocs folder not found!"
           exit 1
         fi
-
+    
         if [ ! -f "target/site/apidocs/index.html" ]; then
           echo "Error: index.html not found in generated documentation!"
           exit 1
         fi
-
+    
         echo "Documentation generated successfully"
         ls -la target/site/apidocs/
+
 
     - name: Configure AWS credentials
       if: success()
@@ -157,7 +157,6 @@ jobs:
 
     - name: Upload Documentation to S3
       if: success()
-      working-directory: ./src/
       run: |
         echo "Uploading documentation to S3..."
 
