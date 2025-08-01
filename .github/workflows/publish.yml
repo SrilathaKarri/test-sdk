@@ -159,46 +159,34 @@ jobs:
       if: success()
       run: |
         echo "Uploading documentation to S3..."
-
+    
         S3_BUCKET="${{ secrets.S3_DOCS_BUCKET }}"
-
+        DOCS_DIR="target/site/apidocs"
+    
         if [ -z "$S3_BUCKET" ]; then
           echo "Error: S3_DOCS_BUCKET secret not set!"
           exit 1
         fi
-
-        aws s3 sync target/site/apidocs/ s3://$S3_BUCKET/ \
+    
+        if [ ! -d "$DOCS_DIR" ]; then
+          echo "Error: Documentation directory not found!"
+          exit 1
+        fi
+    
+        # Upload with proper metadata
+        aws s3 sync "$DOCS_DIR/" "s3://$S3_BUCKET/" \
           --delete \
-          --exclude "*.git/*" \
           --cache-control "public, max-age=3600" \
-          --metadata-directive REPLACE
-
-        aws s3 cp s3://$S3_BUCKET/ s3://$S3_BUCKET/ \
-          --recursive \
-          --exclude "*" \
-          --include "*.html" \
-          --content-type "text/html" \
-          --metadata-directive REPLACE
-
-        aws s3 cp s3://$S3_BUCKET/ s3://$S3_BUCKET/ \
-          --recursive \
-          --exclude "*" \
-          --include "*.css" \
-          --content-type "text/css" \
-          --metadata-directive REPLACE
-
-        aws s3 cp s3://$S3_BUCKET/ s3://$S3_BUCKET/ \
-          --recursive \
-          --exclude "*" \
-          --include "*.js" \
-          --content-type "application/javascript" \
-          --metadata-directive REPLACE
-
+          --metadata-directive REPLACE \
+          --exact-timestamps \
+          --content-type "application/octet-stream"
+    
         echo "Documentation uploaded successfully to S3 bucket: $S3_BUCKET"
 
         S3_WEBSITE_URL="http://$S3_BUCKET.s3-website-${{ secrets.AWS_REGION }}.amazonaws.com"
         echo "S3_WEBSITE_URL=$S3_WEBSITE_URL" >> $GITHUB_ENV
         echo "Documentation available at: $S3_WEBSITE_URL"
+
 
     - name: Invalidate CloudFront Cache (Optional)
       if: success() && vars.CLOUDFRONT_DISTRIBUTION_ID != ''
