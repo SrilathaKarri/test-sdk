@@ -28,7 +28,7 @@ jobs:
     - name: Create embedded configuration
       run: |
         mkdir -p src/main/resources
-        cat > src/main/resources/sdk-embedded.properties << 'EOF'
+        cat > src/main/resources/sdk-embedded.properties << EOF
         # Embedded SDK Configuration (from GitHub Secrets)
         sdk.embedded.base-url=${{ secrets.SDK_BASE_URL }}
         sdk.embedded.certificate-pem=${{ secrets.CERTIFICATE_PEM }}
@@ -36,24 +36,23 @@ jobs:
         sdk.embedded.facility-hprid-auth=${{ secrets.FACILITY_HPRID_AUTH }}
         sdk.embedded.google-api-key=${{ secrets.GOOGLE_API_KEY }}
         EOF
-        
+
         echo "Embedded configuration created successfully"
-        
-    # NEW: Verify the configuration was created (without exposing secrets)
+
     - name: Verify embedded configuration
-      working-directory: ./src/
       run: |
         if [ ! -f "src/main/resources/sdk-embedded.properties" ]; then
           echo "Error: Embedded configuration file not created!"
           exit 1
         fi
-        
+    
         echo "Configuration file exists. Checking for required keys..."
         grep -q "sdk.embedded.base-url" src/main/resources/sdk-embedded.properties || { echo "Missing base-url"; exit 1; }
         grep -q "sdk.embedded.certificate-pem" src/main/resources/sdk-embedded.properties || { echo "Missing certificate-pem"; exit 1; }
         grep -q "sdk.embedded.abha-certificate-pem" src/main/resources/sdk-embedded.properties || { echo "Missing abha-certificate-pem"; exit 1; }
-        
+    
         echo "All required configuration keys present"
+
         
     - name: Import GPG key
       uses: crazy-max/ghaction-import-gpg@v6
