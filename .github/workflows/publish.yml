@@ -1,0 +1,244 @@
+name: Publish SDK to Maven Central
+on:
+  push:
+    branches: [ java-sdk-filters ]
+    paths:
+      - 'java-21/**'              
+      - '.github/workflows/publish.yml'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+        name: ${{ github.ref_name == 'java-abha-flow' && 'production' || github.ref_name == 'main' && 'staging' || 'dev' }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up JDK 21
+      uses: actions/setup-java@v3
+      with:
+        java-version: '21'
+        distribution: 'temurin'
+        cache: 'maven'
+
+    # NEW: Create embedded configuration file from secrets
+    - name: Create embedded configuration
+      working-directory: ./java-21/
+      run: |
+        mkdir -p src/main/resources
+        cat > src/main/resources/sdk-embedded.properties << 'EOF'
+        # Embedded SDK Configuration (from GitHub Secrets)
+        sdk.embedded.base-url=${{ secrets.SDK_BASE_URL }}
+        sdk.embedded.certificate-pem=${{ secrets.CERTIFICATE_PEM }}
+        sdk.embedded.abha-certificate-pem=${{ secrets.ABHA_ENCRYPTION_CERTIFICATE }}
+        sdk.embedded.facility-hprid-auth=${{ secrets.FACILITY_HPRID_AUTH }}
+        sdk.embedded.google-api-key=${{ secrets.GOOGLE_API_KEY }}
+        EOF
+        
+        echo "Embedded configuration created successfully"
+        
+    # NEW: Verify the configuration was created (without exposing secrets)
+    - name: Verify embedded configuration
+      working-directory: ./java-21/
+      run: |
+        if [ ! -f "src/main/resources/sdk-embedded.properties" ]; then
+          echo "Error: Embedded configuration file not created!"
+          exit 1
+        fi
+        
+        echo "Configuration file exists. Checking for required keys..."
+        grep -q "sdk.embedded.base-url" src/main/resources/sdk-embedded.properties || { echo "Missing base-url"; exit 1; }
+        grep -q "sdk.embedded.certificate-pem" src/main/resources/sdk-embedded.properties || { echo "Missing certificate-pem"; exit 1; }
+        grep -q "sdk.embedded.abha-certificate-pem" src/main/resources/sdk-embedded.properties || { echo "Missing abha-certificate-pem"; exit 1; }
+        
+        echo "All required configuration keys present"
+        
+    - name: Import GPG key
+      uses: crazy-max/ghaction-import-gpg@v6
+      with:
+        gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+        passphrase: ${{ secrets.GPG_PASSPHRASE }}
+
+    - name: Setup Maven settings.xml
+      run: |
+        mkdir -p ~/.m2
+        cp .github/workflows/settings.xml ~/.m2/
+        
+    - name: Build and deploy to Maven Central
+      working-directory: ./java-21/
+      env:
+        MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
+        MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
+        GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+     
+      run: |
+        mvn clean deploy -B -Dgpg.passphrase=${{ env.GPG_PASSPHRASE }} -DskipTests -X | tee $GITHUB_WORKSPACE/deploy.log
+        if [ ! -f "$GITHUB_WORKSPACE/deploy.log" ]; then
+          echo "Error: deploy.log not found!"
+          exit 1
+        fi
+
+    - name: Debugging:Show deploy.log contents
+      run: |
+          cat $GITHUB_WORKSPACE/deploy.log
+
+    - name: Extract deployment ID from Maven logs
+      id: extract-id
+      run: |
+        DEPLOYMENT_ID=$(grep -oP '(?<=deploymentId: )\b[0-9a-fA-F-]{36}\b' $GITHUB_WORKSPACE/deploy.log)
+        if [ -z "$DEPLOYMENT_ID" ]; then
+          echo "Error: Deployment ID not found!"
+          exit 1
+        fi
+        echo "deployment_id=$DEPLOYMENT_ID" >> $GITHUB_ENV
+        echo "deployment_id=$DEPLOYMENT_ID" >> $GITHUB_OUTPUT
+        echo "Found deployment ID: $DEPLOYMENT_ID"
+    
+    - name: Wait for validation
+      if: steps.extract-id.outputs.deployment_id != ''
+      run: |
+        echo "Waiting for deployment validation..."
+        sleep 60
+
+    - name: Publish deployment
+      if: steps.extract-id.outputs.deployment_id != ''
+      env:
+        MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
+        MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
+      run: |
+        DEPLOYMENT_ID="${{ steps.extract-id.outputs.deployment_id }}"
+        AUTH_HEADER=$(echo -n "${{ secrets.MAVEN_USERNAME }}:${{ secrets.MAVEN_PASSWORD }}" | base64)
+        echo "Publishing deployment $DEPLOYMENT_ID"
+        
+        response=$(curl -X POST "https://central.sonatype.com/api/v1/publisher/deployment/$DEPLOYMENT_ID" \
+          -H "Content-Type: application/json" \
+          -H "Authorization: Basic $AUTH_HEADER" \
+          -H "Accept: */*" \
+          -d '' \
+          -w "%{http_code}" \
+          -s)
+        
+        echo "Response: $response"
+        
+        if echo "$response" | grep -q "error"; then
+          echo "Error in publishing: $response"
+          exit 1
+        fi
+        
+        echo "Deployment published successfully"
+
+    - name: Generate Documentation
+      if: success()
+      working-directory: ./java-21/
+      run: |
+        echo "Generating Javadoc documentation..."
+        mvn javadoc:javadoc -q
+
+        if [ ! -d "target/site/apidocs" ]; then
+          echo "Error: Documentation not generated - apidocs folder not found!"
+          exit 1
+        fi
+
+        if [ ! -f "target/site/apidocs/index.html" ]; then
+          echo "Error: index.html not found in generated documentation!"
+          exit 1
+        fi
+
+        echo "Documentation generated successfully"
+        ls -la target/site/apidocs/
+
+    - name: Configure AWS credentials
+      if: success()
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
+    - name: Upload Documentation to S3
+      if: success()
+      working-directory: ./java-21/
+      run: |
+        echo "Uploading documentation to S3..."
+
+        S3_BUCKET="${{ secrets.S3_DOCS_BUCKET }}"
+
+        if [ -z "$S3_BUCKET" ]; then
+          echo "Error: S3_DOCS_BUCKET secret not set!"
+          exit 1
+        fi
+
+        aws s3 sync target/site/apidocs/ s3://$S3_BUCKET/ \
+          --delete \
+          --exclude "*.git/*" \
+          --cache-control "public, max-age=3600" \
+          --metadata-directive REPLACE
+
+        aws s3 cp s3://$S3_BUCKET/ s3://$S3_BUCKET/ \
+          --recursive \
+          --exclude "*" \
+          --include "*.html" \
+          --content-type "text/html" \
+          --metadata-directive REPLACE
+
+        aws s3 cp s3://$S3_BUCKET/ s3://$S3_BUCKET/ \
+          --recursive \
+          --exclude "*" \
+          --include "*.css" \
+          --content-type "text/css" \
+          --metadata-directive REPLACE
+
+        aws s3 cp s3://$S3_BUCKET/ s3://$S3_BUCKET/ \
+          --recursive \
+          --exclude "*" \
+          --include "*.js" \
+          --content-type "application/javascript" \
+          --metadata-directive REPLACE
+
+        echo "Documentation uploaded successfully to S3 bucket: $S3_BUCKET"
+
+        S3_WEBSITE_URL="http://$S3_BUCKET.s3-website-${{ secrets.AWS_REGION }}.amazonaws.com"
+        echo "S3_WEBSITE_URL=$S3_WEBSITE_URL" >> $GITHUB_ENV
+        echo "Documentation available at: $S3_WEBSITE_URL"
+
+    - name: Invalidate CloudFront Cache (Optional)
+      if: success() && vars.CLOUDFRONT_DISTRIBUTION_ID != ''
+      run: |
+        echo "Invalidating CloudFront cache..."
+        aws cloudfront create-invalidation \
+          --distribution-id ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }} \
+          --paths "/*"
+        echo "CloudFront cache invalidation initiated"
+
+    - name: Complete Publishing to Maven Central
+      if: success()
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const url = "https://central.sonatype.com/publishing/deployments";
+          const docsUrl = process.env.S3_WEBSITE_URL || "S3 bucket configured in secrets";
+          console.log(`Publishing completed. Visit ${url} to verify the deployment was successful.`);
+          console.log(`Documentation updated at: ${docsUrl}`);
+          core.notice(`SDK successfully published to Maven Central! Visit ${url} to verify.`);
+          core.notice(`Documentation updated and available at: ${docsUrl}`);
+
+    - name: Post-deployment Summary
+      if: always()
+      run: |
+        echo "=== Deployment Summary ==="
+        echo "Deployment Status: ${{ job.status }}"
+
+        if [ "${{ job.status }}" == "success" ]; then
+          echo "SDK successfully published to Maven Central with embedded configuration"
+          echo "Documentation generated and uploaded to S3"
+          echo "Documentation URL: ${{ env.S3_WEBSITE_URL }}"
+          echo ""
+          echo "Users now only need to configure:"
+          echo "- api.key (required)"
+          echo "- api.url (optional - will use embedded if not provided)"
+          echo "- Other values are embedded from build-time secrets"
+        else
+          echo "Deployment failed - check logs above"
+        fi
