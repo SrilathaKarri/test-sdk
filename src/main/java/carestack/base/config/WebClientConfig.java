@@ -76,7 +76,7 @@ public class WebClientConfig {
                 .build();
     }
 
-    private String determineApiUrl() {
+    public String determineApiUrl() {
         // User configuration takes precedence, fallback to embedded
         return (userApiUrl != null && !userApiUrl.trim().isEmpty())
                 ? userApiUrl
