@@ -174,12 +174,9 @@ jobs:
         fi
     
         # Upload with proper metadata
-        aws s3 sync "$DOCS_DIR/" "s3://$S3_BUCKET/" \
-          --delete \
-          --cache-control "public, max-age=3600" \
-          --metadata-directive REPLACE \
-          --exact-timestamps \
-    
+        aws s3 rm "s3://$S3_BUCKET/" --recursive
+        aws s3 cp target/site/apidocs "s3://$S3_BUCKET/" --recursive
+
         echo "Documentation uploaded successfully to S3 bucket: $S3_BUCKET"
 
         S3_WEBSITE_URL="http://$S3_BUCKET.s3-website-${{ secrets.AWS_REGION }}.amazonaws.com"
