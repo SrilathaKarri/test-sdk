@@ -179,7 +179,6 @@ jobs:
           --cache-control "public, max-age=3600" \
           --metadata-directive REPLACE \
           --exact-timestamps \
-          --content-type "application/octet-stream"
     
         echo "Documentation uploaded successfully to S3 bucket: $S3_BUCKET"
 
