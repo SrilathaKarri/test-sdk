@@ -3,14 +3,14 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>com.achalahealth.carestack</groupId>
-  <artifactId>carestack</artifactId>
-  <version>1.0.2</version>
+  <groupId>com.achalahealth.carestack-staging</groupId>
+  <artifactId>carestack-staging</artifactId>
+  <version>1.0.10</version>
   <packaging>jar</packaging>
 
   <name>carestack</name>
   <description>A reactive Java SDK for the CareStack EHR platform, simplifying health records management with AI-powered FHIR bundle generation.</description>
-  <url>https://github.com/achalahealth/ehrsdk</url>
+  <url>https://github.com/example/ehrsdk</url>
 
   <organization>
     <name>Achala Health Services Private Limited</name>
@@ -27,7 +27,7 @@
  <developers>
     <developer>
       <name>Giridhar Apparusu</name>
-      <email>giridhar@achalahealth.com</email>
+      <email>example@gmail.com</email>
       <organization>Achala Health Services Private Limited</organization>
       <organizationUrl>http://www.achalahealth.com</organizationUrl>
       <roles>
