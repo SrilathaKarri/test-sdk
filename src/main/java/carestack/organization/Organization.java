@@ -1,5 +1,6 @@
 package carestack.organization;
 
+import carestack.base.config.EmbeddedSdkProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,6 +44,9 @@ import java.util.Map;
 @Service
 public class Organization extends Base {
 
+    @Autowired
+    private EmbeddedSdkProperties embeddedProperties;
+
     private final String googleApiKey;
     private final Demographic demographic;
     private final WebClient webClient;
@@ -58,8 +62,9 @@ public class Organization extends Base {
     @Autowired
     public Organization(ObjectMapper objectMapper,
                         WebClient webClient,
-                        @Value("${google.api.key}") String googleApiKey,
-                        Demographic demographic) {
+                        @Value("${google.api.key:#{null}}") String googleApiKey,
+                        Demographic demographic,
+                        EmbeddedSdkProperties embeddedProperties) {
         super(objectMapper, webClient);
         this.googleApiKey = googleApiKey;
         this.demographic = demographic;
@@ -621,7 +626,10 @@ public class Organization extends Base {
      */
     public Mono<ResponseDTOs.LocationResponseDTO> getLatitudeLongitude(String location) {
         String encodedLocation = URLEncoder.encode(location, StandardCharsets.UTF_8);
-        String fullUrl = Constants.GOOGLE_LOCATION_URL + "?address=" + encodedLocation + "&key=" + googleApiKey;
+        String googleApi = (googleApiKey != null && !googleApiKey.trim().isEmpty())
+                ? googleApiKey
+                : embeddedProperties.getGoogleApiKey();
+        String fullUrl = Constants.GOOGLE_LOCATION_URL + "?address=" + encodedLocation + "&key=" + googleApi;
 
         return webClient.get()
                 .uri(fullUrl)

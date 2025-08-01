@@ -1,71 +1,124 @@
 package carestack.organization;
 
+import carestack.base.config.EmbeddedSdkProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 import carestack.base.Base;
+import carestack.base.errors.EhrApiError;
 import carestack.organization.dto.ResponseDTOs;
 
+import java.time.Duration;
 import java.util.Map;
+
+import static carestack.base.errors.EhrApiError.mapHttpStatusToErrorType;
 
 /**
  * Service class for interacting with the Demographic API to fetch and post-data.
  * <p>
- * This class provides methods for making GET and POST requests to the API by leveraging the
- * centralized client configuration and error handling from its {@link Base} parent class.
+ * This class provides methods for making GET and POST requests to the API, with error handling and response mapping.
+ * It utilizes {@link WebClient} from Spring WebFlux for making non-blocking HTTP requests.
+ * </p>
+ * <p>
+ * The service is responsible for fetching data from the API and performing the required transformations
+ * or processing of that data based on the provided request.
  * </p>
  *
  * @see WebClient
- * @see Base
  */
 @Service
 public class Demographic extends Base {
 
-    /**
-     * Constructor for the Demographic service class.
-     *
-     * @param objectMapper The {@link ObjectMapper} for converting JSON to Java objects.
-     * @param webClient The centrally configured {@link WebClient} for making asynchronous HTTP requests.
-     *                  This is passed to the parent constructor to initialize the base service.
-     */
-    protected Demographic(ObjectMapper objectMapper, WebClient webClient) {
-        super(objectMapper, webClient);
-    }
+    private final String apiKey;
+    private final WebClient webClient;
+    private final String baseUrl;
 
+    @Autowired
+    public Demographic(EmbeddedSdkProperties embeddedSdkProperties,
+                       @Value("${api.url:}") String apiURL,
+                       @Value("${api.key}") String apiKey,
+                       WebClient webClient,
+                       ObjectMapper objectMapper) {
+        super(objectMapper, webClient);
+        String apiURL1 = apiURL != null && !apiURL.trim().isEmpty() ? apiURL : embeddedSdkProperties.getBaseUrl();
+        this.apiKey = apiKey;
+        this.webClient = webClient;
+        this.baseUrl = apiURL1;
+    }
     /**
      * Fetches data from the specified API endpoint using a GET request.
      * <p>
-     * This method now delegates to the centralized `get` method in the {@link Base} class,
-     * which handles URL construction, headers, and error handling automatically.
+     * This method sends an HTTP GET request to the specified API endpoint and returns a Mono containing the
+     * response mapped to the provided type. It handles client and server errors gracefully and raises an
+     * {@link EhrApiError} if any errors occur.
      * </p>
      *
      * @param <T> The expected type of the response body.
-     * @param endpoint The relative API endpoint to send the GET request to (e.g., "/users/1").
+     * @param endpoint The API endpoint to send the GET request to.
      * @param typeReference The type reference for the expected response body.
      * @return A {@link Mono} containing the response body mapped to the specified type.
+     * @throws EhrApiError If there is a client or server error in the request.
      */
     public <T> Mono<T> fetchData(String endpoint, ParameterizedTypeReference<T> typeReference) {
-        return super.get(endpoint, typeReference);
+        return webClient.get()
+                .uri(baseUrl + endpoint)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey)
+                .retrieve()
+                .onStatus(HttpStatusCode::is4xxClientError, response ->
+                        response.bodyToMono(String.class)
+                                .defaultIfEmpty("Client error occurred")
+                                .flatMap(body -> Mono.error(new EhrApiError("Client error: " + body, mapHttpStatusToErrorType(response.statusCode()))))
+                )
+                .onStatus(HttpStatusCode::is5xxServerError, response ->
+                        response.bodyToMono(String.class)
+                                .defaultIfEmpty("Server error occurred")
+                                .flatMap(body -> Mono.error(new EhrApiError("Server error: " + body, mapHttpStatusToErrorType(response.statusCode()))))
+                )
+                .bodyToMono(typeReference);
     }
 
     /**
      * Makes a POST request to the specified endpoint with the provided request body.
      * <p>
-     * This method now delegates to the centralized `post` method in the {@link Base} class,
-     * which handles URL construction, headers, and error handling automatically.
+     * This method sends an HTTP POST request to the specified API endpoint with the given request body and
+     * returns a Mono containing the response mapped to the specified type. It handles client and server errors
+     * gracefully and raises an {@link EhrApiError} if any errors occur.
      * </p>
      *
      * @param <T> The type of the request body.
      * @param <R> The expected type of the response body.
-     * @param endpoint The relative API endpoint to send the POST request to.
+     * @param endpoint The API endpoint to send the POST request to.
      * @param requestBody The request body to send in the POST request.
      * @param responseType The type reference for the expected response body.
      * @return A {@link Mono} containing the response body mapped to the specified type.
+     * @throws EhrApiError If there is a client or server error in the request.
      */
     <T, R> Mono<R> makePostRequestForData(String endpoint, T requestBody, ParameterizedTypeReference<R> responseType) {
-        return super.post(endpoint, requestBody, responseType);
+        return webClient.post()
+                .uri(baseUrl + endpoint)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(requestBody)
+                .retrieve()
+                .onStatus(HttpStatusCode::is4xxClientError, response ->
+                        response.bodyToMono(String.class)
+                                .defaultIfEmpty("Client error occurred")
+                                .flatMap(body -> Mono.error(new EhrApiError("Client error: " + body, mapHttpStatusToErrorType(response.statusCode()))))
+                )
+                .onStatus(HttpStatusCode::is5xxServerError, response ->
+                        response.bodyToMono(String.class)
+                                .defaultIfEmpty("Server error occurred")
+                                .flatMap(body -> Mono.error(new EhrApiError("Server error: " + body, mapHttpStatusToErrorType(response.statusCode()))))
+                )
+                .bodyToMono(responseType)
+                .timeout(Duration.ofSeconds(5));
     }
 
     /**
