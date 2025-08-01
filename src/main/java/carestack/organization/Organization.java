@@ -44,8 +44,8 @@ import java.util.Map;
 @Service
 public class Organization extends Base {
 
-    @Autowired
-    private EmbeddedSdkProperties embeddedProperties;
+//    @Autowired
+//    private EmbeddedSdkProperties embeddedProperties;
 
     private final String googleApiKey;
     private final Demographic demographic;
@@ -56,19 +56,24 @@ public class Organization extends Base {
      *
      * @param objectMapper The Jackson ObjectMapper for JSON serialization/deserialization.
      * @param webClient    The Spring WebClient for making reactive HTTP requests.
-     * @param googleApiKey The API key for Google services, injected from properties.
+     * @param userGoogleApiKey The API key for Google services, injected from properties.
      * @param demographic  The service for handling demographic-related API calls.
      */
     @Autowired
     public Organization(ObjectMapper objectMapper,
                         WebClient webClient,
-                        @Value("${google.api.key:#{null}}") String googleApiKey,
+                        @Value("${google.api.key:#{null}}") String userGoogleApiKey,
                         Demographic demographic,
                         EmbeddedSdkProperties embeddedProperties) {
         super(objectMapper, webClient);
-        this.googleApiKey = googleApiKey;
         this.demographic = demographic;
         this.webClient = webClient;
+
+        if (userGoogleApiKey != null && !userGoogleApiKey.trim().isEmpty()) {
+            this.googleApiKey = userGoogleApiKey;
+        } else {
+            this.googleApiKey = embeddedProperties.getGoogleApiKey();
+        }
     }
 
 
@@ -625,11 +630,15 @@ public class Organization extends Base {
      * @param location A string representing the location (e.g., "1600 Amphitheatre Parkway, Mountain View, CA").
      */
     public Mono<ResponseDTOs.LocationResponseDTO> getLatitudeLongitude(String location) {
+        if (StringUtils.isNullOrEmpty(location)) {
+            return Mono.error(new ValidationError("Location cannot be null or empty."));
+        }
+        if (StringUtils.isNullOrEmpty(this.googleApiKey)) {
+            return Mono.error(new EhrApiError("Google API key is not configured.", ErrorType.VALIDATION));
+        }
+
         String encodedLocation = URLEncoder.encode(location, StandardCharsets.UTF_8);
-        String googleApi = (googleApiKey != null && !googleApiKey.trim().isEmpty())
-                ? googleApiKey
-                : embeddedProperties.getGoogleApiKey();
-        String fullUrl = Constants.GOOGLE_LOCATION_URL + "?address=" + encodedLocation + "&key=" + googleApi;
+        String fullUrl = Constants.GOOGLE_LOCATION_URL + "?address=" + encodedLocation + "&key=" + this.googleApiKey;
 
         return webClient.get()
                 .uri(fullUrl)
