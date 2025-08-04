@@ -57,6 +57,19 @@ jobs:
         mkdir -p ~/.m2
         cp .github/workflows/settings.xml ~/.m2/
 
+    # Extract project version and artifact ID
+    - name: Extract project info
+      id: project-info
+      run: |
+        PROJECT_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+        ARTIFACT_ID=$(mvn help:evaluate -Dexpression=project.artifactId -q -DforceStdout)
+        echo "project_version=$PROJECT_VERSION" >> $GITHUB_ENV
+        echo "artifact_id=$ARTIFACT_ID" >> $GITHUB_ENV
+        echo "project_version=$PROJECT_VERSION" >> $GITHUB_OUTPUT
+        echo "artifact_id=$ARTIFACT_ID" >> $GITHUB_OUTPUT
+        echo "Detected project version: $PROJECT_VERSION"
+        echo "Detected artifact ID: $ARTIFACT_ID"
+
     # Build and verify all artifacts are created
     - name: Build project and create artifacts
       env:
@@ -80,27 +93,33 @@ jobs:
         echo "Checking for required artifacts..."
         ls -la target/
         
+        PROJECT_VERSION="${{ env.project_version }}"
+        ARTIFACT_ID="${{ env.artifact_id }}"
+        
+        echo "Looking for artifacts with version: $PROJECT_VERSION"
+        echo "Artifact ID: $ARTIFACT_ID"
+        
         # Check main jar
-        if [ ! -f "target/carestack-staging-1.1.7.jar" ]; then
-          echo "Error: Main JAR not found!"
+        if [ ! -f "target/${ARTIFACT_ID}-${PROJECT_VERSION}.jar" ]; then
+          echo "Error: Main JAR not found! Expected: target/${ARTIFACT_ID}-${PROJECT_VERSION}.jar"
           exit 1
         fi
         
         # Check sources jar
-        if [ ! -f "target/carestack-staging-1.1.7-sources.jar" ]; then
-          echo "Error: Sources JAR not found!"
+        if [ ! -f "target/${ARTIFACT_ID}-${PROJECT_VERSION}-sources.jar" ]; then
+          echo "Error: Sources JAR not found! Expected: target/${ARTIFACT_ID}-${PROJECT_VERSION}-sources.jar"
           exit 1
         fi
         
         # Check javadoc jar
-        if [ ! -f "target/carestack-staging-1.1.7-javadoc.jar" ]; then
-          echo "Error: Javadoc JAR not found!"
+        if [ ! -f "target/${ARTIFACT_ID}-${PROJECT_VERSION}-javadoc.jar" ]; then
+          echo "Error: Javadoc JAR not found! Expected: target/${ARTIFACT_ID}-${PROJECT_VERSION}-javadoc.jar"
           exit 1
         fi
         
         # Verify javadoc jar content
         echo "Verifying javadoc jar content..."
-        jar -tf target/carestack-staging-1.1.7-javadoc.jar | head -20
+        jar -tf "target/${ARTIFACT_ID}-${PROJECT_VERSION}-javadoc.jar" | head -20
         
         echo "All artifacts created successfully!"
 
@@ -241,30 +260,34 @@ jobs:
         # Wait a bit for Maven Central to process
         sleep 30
         
+        PROJECT_VERSION="${{ env.project_version }}"
+        ARTIFACT_ID="${{ env.artifact_id }}"
+        GROUP_ID="com.achalahealth.carestack-staging"
+        
         # Check if artifacts are available (this might take time to propagate)
-        MAVEN_URL="https://repo1.maven.org/maven2/com/achalahealth/carestack-staging/carestack-staging/1.1.7/"
+        MAVEN_URL="https://repo1.maven.org/maven2/com/achalahealth/carestack-staging/${ARTIFACT_ID}/${PROJECT_VERSION}/"
         
         echo "Checking Maven Central URL: $MAVEN_URL"
         
         # Try to fetch the POM to verify deployment
-        if curl -f -s "${MAVEN_URL}carestack-staging-1.1.7.pom" > /dev/null; then
-          echo "Main POM found on Maven Central"
+        if curl -f -s "${MAVEN_URL}${ARTIFACT_ID}-${PROJECT_VERSION}.pom" > /dev/null; then
+          echo "✅ Main POM found on Maven Central"
         else
-          echo "Main POM not yet available (might take time to sync)"
+          echo "⏳ Main POM not yet available (might take time to sync)"
         fi
         
         # Check for javadoc jar
-        if curl -f -s "${MAVEN_URL}carestack-staging-1.1.7-javadoc.jar" > /dev/null; then
-          echo "Javadoc JAR found on Maven Central"
+        if curl -f -s "${MAVEN_URL}${ARTIFACT_ID}-${PROJECT_VERSION}-javadoc.jar" > /dev/null; then
+          echo "✅ Javadoc JAR found on Maven Central"
         else
-          echo "Javadoc JAR not yet available (might take time to sync)"
+          echo "⏳ Javadoc JAR not yet available (might take time to sync)"
         fi
         
         # Check for sources jar
-        if curl -f -s "${MAVEN_URL}carestack-staging-1.1.7-sources.jar" > /dev/null; then
-          echo "Sources JAR found on Maven Central"
+        if curl -f -s "${MAVEN_URL}${ARTIFACT_ID}-${PROJECT_VERSION}-sources.jar" > /dev/null; then
+          echo "✅ Sources JAR found on Maven Central"
         else
-          echo "Sources JAR not yet available (might take time to sync)"
+          echo "⏳ Sources JAR not yet available (might take time to sync)"
         fi
 
     - name: Complete Publishing to Maven Central
@@ -273,7 +296,9 @@ jobs:
       with:
         script: |
           const url = "https://central.sonatype.com/publishing/deployments";
-          const mavenUrl = "https://repo1.maven.org/maven2/com/achalahealth/carestack-staging/carestack-staging/1.1.7/";
+          const projectVersion = process.env.project_version;
+          const artifactId = process.env.artifact_id;
+          const mavenUrl = `https://repo1.maven.org/maven2/com/achalahealth/carestack-staging/${artifactId}/${projectVersion}/`;
           const docsUrl = process.env.S3_WEBSITE_URL || "S3 bucket configured in secrets";
           
           console.log(`Publishing completed. Visit ${url} to verify the deployment was successful.`);
@@ -292,21 +317,21 @@ jobs:
         echo "Deployment Status: ${{ job.status }}"
 
         if [ "${{ job.status }}" == "success" ]; then
-          echo "SDK successfully published to Maven Central with embedded configuration"
-          echo "Javadoc JAR created and deployed"
-          echo "Sources JAR created and deployed"
-          echo "Documentation generated and uploaded to S3"
-          echo "Documentation URL: ${{ env.S3_WEBSITE_URL }}"
+          echo "✅ SDK successfully published to Maven Central with embedded configuration"
+          echo "✅ Javadoc JAR created and deployed"
+          echo "✅ Sources JAR created and deployed"
+          echo "✅ Documentation generated and uploaded to S3"
+          echo "✅ Documentation URL: ${{ env.S3_WEBSITE_URL }}"
           echo ""
-          echo "For IDE hover documentation to work:"
+          echo "📚 For IDE hover documentation to work:"
           echo "   1. Clear your IDE's cache and restart"
           echo "   2. Refresh/reimport your project dependencies"
           echo "   3. The javadoc JAR should be automatically downloaded by Maven/Gradle"
           echo ""
-          echo "Users now only need to configure:"
+          echo "🔧 Users now only need to configure:"
           echo "   - api.key (required)"
           echo "   - api.url (optional - will use embedded if not provided)"
           echo "   - Other values are embedded from build-time secrets"
         else
-          echo "Deployment failed - check logs above"
+          echo "❌ Deployment failed - check logs above"
         fi
