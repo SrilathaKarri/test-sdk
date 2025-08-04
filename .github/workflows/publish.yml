@@ -55,7 +55,7 @@ jobs:
     - name: Setup Maven settings.xml
       run: |
         mkdir -p ~/.m2
-        cp .github/workflows/settings.xml ~/.m2/
+        cp settings.xml ~/.m2/
 
     # Extract project version and artifact ID
     - name: Extract project info
