@@ -5,7 +5,7 @@
 
   <groupId>com.achalahealth.carestack-staging</groupId>
   <artifactId>carestack-staging</artifactId>
-  <version>1.1.7</version>
+  <version>1.1.8</version>
   <packaging>jar</packaging>
 
   <name>carestack</name>
@@ -214,7 +214,6 @@
       <version>9.31</version>
     </dependency>
 
-
     <!-- BouncyCastle for certificate parsing -->
       <dependency>
         <groupId>org.bouncycastle</groupId>
@@ -227,8 +226,6 @@
         <artifactId>bcpkix-jdk18on</artifactId>
         <version>1.77</version>
       </dependency>
-
-
   </dependencies>
 
   <build>
@@ -270,6 +267,7 @@
         </configuration>
       </plugin>
 
+      <!-- Central Publishing Plugin -->
       <plugin>
            <groupId>org.sonatype.central</groupId>
            <artifactId>central-publishing-maven-plugin</artifactId>
@@ -278,9 +276,9 @@
            <configuration>
              <publishingServerId>central</publishingServerId>
            </configuration>
-     </plugin>
+      </plugin>
 
-
+      <!-- Enhanced Javadoc Plugin Configuration -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-javadoc-plugin</artifactId>
@@ -290,6 +288,19 @@
           <windowtitle>carestack</windowtitle>
           <doclint>none</doclint>
           <failOnError>false</failOnError>
+          <show>public</show>
+          <nohelp>true</nohelp>
+          <encoding>UTF-8</encoding>
+          <charset>UTF-8</charset>
+          <docencoding>UTF-8</docencoding>
+          <additionalJOptions>
+            <additionalJOption>-J-Duser.language=en</additionalJOption>
+            <additionalJOption>-J-Duser.country=US</additionalJOption>
+          </additionalJOptions>
+          <additionalOptions>
+            <additionalOption>-Xdoclint:none</additionalOption>
+            <additionalOption>-quiet</additionalOption>
+          </additionalOptions>
           <sourceFileExcludes>
             <exclude>**/dto/**/*.java</exclude>
             <exclude>**/base/**/*.java</exclude>
@@ -305,35 +316,26 @@
           </sourceFileExcludes>
         </configuration>
         <executions>
-          <!-- Execution for generating browsable documentation -->
-          <execution>
-            <id>generate-docs</id>
-            <phase>site</phase>
-            <goals>
-              <goal>javadoc</goal>
-            </goals>
-            <configuration>
-            </configuration>
-          </execution>
-
-          <!-- Execution for creating Javadoc jar for SDK  -->
+          <!-- Always attach javadoc jar during package phase -->
           <execution>
             <id>attach-javadocs</id>
             <phase>package</phase>
             <goals>
               <goal>jar</goal>
             </goals>
-            <configuration>
-              <additionalOptions>
-                <additionalOption>-Xdoclint:none</additionalOption>
-                <additionalOption>-quiet</additionalOption>
-                <additionalOption>-J-Duser.language=en</additionalOption>
-              </additionalOptions>
-            </configuration>
+          </execution>
+          <!-- Generate browsable documentation -->
+          <execution>
+            <id>generate-docs</id>
+            <phase>site</phase>
+            <goals>
+              <goal>javadoc</goal>
+            </goals>
           </execution>
         </executions>
       </plugin>
 
+      <!-- Source Plugin - Always attach sources -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-source-plugin</artifactId>
@@ -341,17 +343,19 @@
         <executions>
           <execution>
             <id>attach-sources</id>
+            <phase>package</phase>
             <goals>
-              <goal>jar</goal>
+              <goal>jar-no-fork</goal>
             </goals>
           </execution>
         </executions>
       </plugin>
 
+      <!-- GPG Plugin for signing -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-gpg-plugin</artifactId>
-        <version>1.6</version>
+        <version>3.1.0</version>
         <executions>
           <execution>
             <id>sign-artifacts</id>
@@ -363,7 +367,7 @@
         </executions>
       </plugin>
 
-
+      <!-- Deploy Plugin -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-deploy-plugin</artifactId>
@@ -372,17 +376,16 @@
           <retryFailedDeploymentCount>2</retryFailedDeploymentCount>
         </configuration>
       </plugin>
-     <plugin>
-        <groupId>org.sonatype.plugins</groupId>
-        <artifactId>nexus-staging-maven-plugin</artifactId>
-        <version>1.6.13</version>
-        <extensions>true</extensions>
-        <configuration>
-            <serverId>ossrh</serverId>
-            <nexusUrl>https://s01.oss.sonatype.org/</nexusUrl>
-            <autoReleaseAfterClose>true</autoReleaseAfterClose>
-        </configuration>
-    </plugin>
+
+      <!-- Remove the nexus-staging plugin as you're using central-publishing -->
     </plugins>
   </build>
+
+  <!-- Distribution Management for Maven Central -->
+  <distributionManagement>
+    <repository>
+      <id>central</id>
+      <url>https://central.sonatype.com/api/v1/publisher/upload</url>
+    </repository>
+  </distributionManagement>
 </project>
