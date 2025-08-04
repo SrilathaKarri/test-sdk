@@ -10,7 +10,7 @@
 
   <name>carestack</name>
   <description>A reactive Java SDK for the CareStack EHR platform, simplifying health records management with AI-powered FHIR bundle generation.</description>
-  <url>https://github.com/achalahealth/ehrsdk</url>
+  <url>https://github.com/achalahealth/ehrsdk </url>
 
   <organization>
     <name>Achala Health Services Private Limited</name>
