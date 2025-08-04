@@ -72,7 +72,7 @@ jobs:
         GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
      
       run: |
-        mvn clean deploy javadoc:jar source:jar -B -Dgpg.passphrase=${{ env.GPG_PASSPHRASE }} -DskipTests -X | tee $GITHUB_WORKSPACE/deploy.log
+        mvn clean deploy javadoc:jar -B -Dgpg.passphrase=${{ env.GPG_PASSPHRASE }} -DskipTests -X | tee $GITHUB_WORKSPACE/deploy.log
         if [ ! -f "$GITHUB_WORKSPACE/deploy.log" ]; then
           echo "Error: deploy.log not found!"
           exit 1
