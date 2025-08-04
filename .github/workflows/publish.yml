@@ -2,9 +2,6 @@ name: Publish SDK to Maven Central
 on:
   push:
     branches: [ main ]
-    # paths:
-    #   - 'src/**'              
-    #   - '.github/workflows/publish.yml' 
 
 jobs:
   publish:
@@ -12,19 +9,18 @@ jobs:
     environment:
       name: ${{ github.ref_name == 'main' && 'production' || 'dev' }}
 
-  
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
       
     - name: Set up JDK 21
-      uses: actions/setup-java@v3
+      uses: actions/setup-java@v4
       with:
         java-version: '21'
         distribution: 'temurin'
         cache: 'maven'
 
-    # NEW: Create embedded configuration file from secrets
+    # Create embedded configuration file from secrets
     - name: Create embedded configuration
       run: |
         mkdir -p src/main/resources
@@ -36,7 +32,6 @@ jobs:
         sdk.embedded.facility-hprid-auth=${{ secrets.FACILITY_HPRID_AUTH }}
         sdk.embedded.google-api-key=${{ secrets.GOOGLE_API_KEY }}
         EOF
-
         echo "Embedded configuration created successfully"
 
     - name: Verify embedded configuration
@@ -45,14 +40,11 @@ jobs:
           echo "Error: Embedded configuration file not created!"
           exit 1
         fi
-    
         echo "Configuration file exists. Checking for required keys..."
         grep -q "sdk.embedded.base-url" src/main/resources/sdk-embedded.properties || { echo "Missing base-url"; exit 1; }
         grep -q "sdk.embedded.certificate-pem" src/main/resources/sdk-embedded.properties || { echo "Missing certificate-pem"; exit 1; }
         grep -q "sdk.embedded.abha-certificate-pem" src/main/resources/sdk-embedded.properties || { echo "Missing abha-certificate-pem"; exit 1; }
-    
         echo "All required configuration keys present"
-
         
     - name: Import GPG key
       uses: crazy-max/ghaction-import-gpg@v6
@@ -64,23 +56,71 @@ jobs:
       run: |
         mkdir -p ~/.m2
         cp .github/workflows/settings.xml ~/.m2/
-        
-    - name: Build and deploy to Maven Central
+
+    # Build and verify all artifacts are created
+    - name: Build project and create artifacts
       env:
         MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
         MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
         GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-     
       run: |
-        mvn clean deploy javadoc:jar -B -Dgpg.passphrase=${{ env.GPG_PASSPHRASE }} -DskipTests -X | tee $GITHUB_WORKSPACE/deploy.log
+        # Clean and compile first
+        mvn clean compile -B
+        
+        # Generate sources jar
+        mvn source:jar-no-fork -B
+        
+        # Generate javadoc jar
+        mvn javadoc:jar -B
+        
+        # Package everything
+        mvn package -B -DskipTests
+        
+        # Verify all required artifacts exist
+        echo "Checking for required artifacts..."
+        ls -la target/
+        
+        # Check main jar
+        if [ ! -f "target/carestack-staging-1.1.7.jar" ]; then
+          echo "Error: Main JAR not found!"
+          exit 1
+        fi
+        
+        # Check sources jar
+        if [ ! -f "target/carestack-staging-1.1.7-sources.jar" ]; then
+          echo "Error: Sources JAR not found!"
+          exit 1
+        fi
+        
+        # Check javadoc jar
+        if [ ! -f "target/carestack-staging-1.1.7-javadoc.jar" ]; then
+          echo "Error: Javadoc JAR not found!"
+          exit 1
+        fi
+        
+        # Verify javadoc jar content
+        echo "Verifying javadoc jar content..."
+        jar -tf target/carestack-staging-1.1.7-javadoc.jar | head -20
+        
+        echo "All artifacts created successfully!"
+
+    - name: Deploy to Maven Central
+      env:
+        MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
+        MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
+        GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+      run: |
+        # Deploy with all artifacts
+        mvn deploy -B -Dgpg.passphrase=${{ env.GPG_PASSPHRASE }} -DskipTests -X | tee $GITHUB_WORKSPACE/deploy.log
+        
         if [ ! -f "$GITHUB_WORKSPACE/deploy.log" ]; then
           echo "Error: deploy.log not found!"
           exit 1
         fi
 
-    - name: Debugging:Show deploy.log contents
+    - name: Show deploy.log contents
       run: |
-          cat $GITHUB_WORKSPACE/deploy.log
+        cat $GITHUB_WORKSPACE/deploy.log
 
     - name: Extract deployment ID from Maven logs
       id: extract-id
@@ -127,10 +167,10 @@ jobs:
         
         echo "Deployment published successfully"
 
-    - name: Generate Documentation
+    - name: Generate Documentation for S3
       if: success()
       run: |
-        echo "Generating Javadoc documentation..."
+        echo "Generating Javadoc documentation for S3..."
         mvn javadoc:javadoc -q
     
         if [ ! -d "target/site/apidocs" ]; then
@@ -145,7 +185,6 @@ jobs:
     
         echo "Documentation generated successfully"
         ls -la target/site/apidocs/
-
 
     - name: Configure AWS credentials
       if: success()
@@ -185,8 +224,6 @@ jobs:
         echo "S3_WEBSITE_URL=$S3_WEBSITE_URL" >> $GITHUB_ENV
         echo "Documentation available at: $S3_WEBSITE_URL"
 
-
-
     - name: Invalidate CloudFront Cache (Optional)
       if: success() && vars.CLOUDFRONT_DISTRIBUTION_ID != ''
       run: |
@@ -196,17 +233,57 @@ jobs:
           --paths "/*"
         echo "CloudFront cache invalidation initiated"
 
+    - name: Verify Maven Central deployment
+      if: success()
+      run: |
+        echo "Verifying deployment on Maven Central..."
+        
+        # Wait a bit for Maven Central to process
+        sleep 30
+        
+        # Check if artifacts are available (this might take time to propagate)
+        MAVEN_URL="https://repo1.maven.org/maven2/com/achalahealth/carestack-staging/carestack-staging/1.1.7/"
+        
+        echo "Checking Maven Central URL: $MAVEN_URL"
+        
+        # Try to fetch the POM to verify deployment
+        if curl -f -s "${MAVEN_URL}carestack-staging-1.1.7.pom" > /dev/null; then
+          echo "Main POM found on Maven Central"
+        else
+          echo "Main POM not yet available (might take time to sync)"
+        fi
+        
+        # Check for javadoc jar
+        if curl -f -s "${MAVEN_URL}carestack-staging-1.1.7-javadoc.jar" > /dev/null; then
+          echo "Javadoc JAR found on Maven Central"
+        else
+          echo "Javadoc JAR not yet available (might take time to sync)"
+        fi
+        
+        # Check for sources jar
+        if curl -f -s "${MAVEN_URL}carestack-staging-1.1.7-sources.jar" > /dev/null; then
+          echo "Sources JAR found on Maven Central"
+        else
+          echo "Sources JAR not yet available (might take time to sync)"
+        fi
+
     - name: Complete Publishing to Maven Central
       if: success()
-      uses: actions/github-script@v6
+      uses: actions/github-script@v7
       with:
         script: |
           const url = "https://central.sonatype.com/publishing/deployments";
+          const mavenUrl = "https://repo1.maven.org/maven2/com/achalahealth/carestack-staging/carestack-staging/1.1.7/";
           const docsUrl = process.env.S3_WEBSITE_URL || "S3 bucket configured in secrets";
+          
           console.log(`Publishing completed. Visit ${url} to verify the deployment was successful.`);
+          console.log(`Maven Central URL: ${mavenUrl}`);
           console.log(`Documentation updated at: ${docsUrl}`);
-          core.notice(`SDK successfully published to Maven Central! Visit ${url} to verify.`);
-          core.notice(`Documentation updated and available at: ${docsUrl}`);
+          
+          core.notice(`SDK successfully published to Maven Central!`);
+          core.notice(`Maven Central: ${mavenUrl}`);
+          core.notice(`Documentation: ${docsUrl}`);
+          core.notice(`Javadoc JAR should be available for IDE hover documentation`);
 
     - name: Post-deployment Summary
       if: always()
@@ -216,13 +293,20 @@ jobs:
 
         if [ "${{ job.status }}" == "success" ]; then
           echo "SDK successfully published to Maven Central with embedded configuration"
+          echo "Javadoc JAR created and deployed"
+          echo "Sources JAR created and deployed"
           echo "Documentation generated and uploaded to S3"
           echo "Documentation URL: ${{ env.S3_WEBSITE_URL }}"
           echo ""
+          echo "For IDE hover documentation to work:"
+          echo "   1. Clear your IDE's cache and restart"
+          echo "   2. Refresh/reimport your project dependencies"
+          echo "   3. The javadoc JAR should be automatically downloaded by Maven/Gradle"
+          echo ""
           echo "Users now only need to configure:"
-          echo "- api.key (required)"
-          echo "- api.url (optional - will use embedded if not provided)"
-          echo "- Other values are embedded from build-time secrets"
+          echo "   - api.key (required)"
+          echo "   - api.url (optional - will use embedded if not provided)"
+          echo "   - Other values are embedded from build-time secrets"
         else
           echo "Deployment failed - check logs above"
         fi
