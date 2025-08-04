@@ -5,12 +5,12 @@
 
   <groupId>com.achalahealth.carestack-staging</groupId>
   <artifactId>carestack-staging</artifactId>
-  <version>1.1.5</version>
+  <version>1.1.6</version>
   <packaging>jar</packaging>
 
   <name>carestack</name>
   <description>A reactive Java SDK for the CareStack EHR platform, simplifying health records management with AI-powered FHIR bundle generation.</description>
-  <url>https://github.com/example/ehrsdk</url>
+  <url>https://github.com/achalahealth/ehrsdk</url>
 
   <organization>
     <name>Achala Health Services Private Limited</name>
@@ -301,7 +301,7 @@
             <exclude>**/config/**/*.java</exclude>
             <exclude>**/validators/**/*.java</exclude>
             <exclude>**/EncryptionUtilities.java</exclude>
-            <exclude>**/PractitionerDTO.java</exclude>
+            <exclude>**/DTO.java</exclude>
           </sourceFileExcludes>
         </configuration>
         <executions>
