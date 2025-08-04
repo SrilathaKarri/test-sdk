@@ -2,9 +2,9 @@ name: Publish SDK to Maven Central
 on:
   push:
     branches: [ main ]
-    paths:
-      - 'src/**'              
-      - '.github/workflows/publish.yml' 
+    # paths:
+    #   - 'src/**'              
+    #   - '.github/workflows/publish.yml' 
 
 jobs:
   publish:
