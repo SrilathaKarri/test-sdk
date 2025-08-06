@@ -1,8 +1,11 @@
 package carestack.patient;
 
+import carestack.base.utils.ApplicationContextProvider;
+import carestack.patient.abha.AbhaService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -42,6 +45,40 @@ import carestack.patient.enums.PatientType;
 public class Patient extends Base implements ResourceService<PatientDTO, UpdatePatientDTO> {
 
     private static final ResourceType RESOURCE_TYPE = ResourceType.Patient;
+
+    /**
+     * ABHA service instance for handling Ayushman Bharat Health Account operations.
+     * Access ABHA functionality through: patient.abha.createAbha(step, payload)
+     */
+    private AbhaService abhaService;
+
+    /**
+     * Public getter for ABHA service with lazy initialization
+     */
+    public AbhaService abha() {
+        return getAbhaService();
+    }
+
+    /**
+     * Public field-style access to ABHA service (lazy-loaded)
+     */
+    public AbhaService getAbha() {
+        return getAbhaService();
+    }
+
+    private AbhaService getAbhaService() {
+        if (abhaService == null) {
+            try {
+                ApplicationContext context = ApplicationContextProvider.getApplicationContext();
+                if (context != null) {
+                    abhaService = context.getBean(AbhaService.class);
+                }
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to get AbhaService bean", e);
+            }
+        }
+        return abhaService;
+    }
 
     protected Patient(ObjectMapper objectMapper, WebClient webClient) {
         super(objectMapper, webClient);

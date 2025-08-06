@@ -1,10 +1,13 @@
 package carestack.encounter;
 
+import carestack.base.utils.ApplicationContextProvider;
+import carestack.encounter.documentLinking.DocumentLinking;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -59,6 +62,29 @@ public class Encounter extends Base {
 
     @Autowired
     private AiService aiService;
+
+    private DocumentLinking documentLinkingService;
+
+    public DocumentLinking documentLinking() {
+        return getDocumentLinkingService();
+    }
+
+    private DocumentLinking getDocumentLinkingService() {
+        if (documentLinkingService == null) {
+            try {
+                ApplicationContext context = ApplicationContextProvider.getApplicationContext();
+                if (context != null) {
+                    documentLinkingService = context.getBean(DocumentLinking.class);
+                } else {
+                    throw new RuntimeException("ApplicationContext is not initialized");
+                }
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to get DocumentLinking bean", e);
+            }
+        }
+        return documentLinkingService;
+    }
+
 
     public Encounter(ObjectMapper objectMapper,
                      WebClient webClient,

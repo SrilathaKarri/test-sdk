@@ -1,8 +1,11 @@
 package carestack.practitioner;
 
+import carestack.base.utils.ApplicationContextProvider;
+import carestack.practitioner.hpr.Hpr;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -43,6 +46,34 @@ import carestack.base.utils.StringUtils;
 public class Practitioner extends Base implements ResourceService<PractitionerDTO, PractitionerDTO> {
 
     private static final ResourceType RESOURCE_TYPE = ResourceType.Practitioner;
+
+    private Hpr hpr;
+
+
+    public Hpr hpr() {
+        return getHprService();
+    }
+
+    /**
+     * Public field-style access to Hpr service (lazy-loaded)
+     */
+    public Hpr getHpr() {
+        return getHprService();
+    }
+
+    private Hpr getHprService() {
+        if (hpr == null) {
+            try {
+                ApplicationContext context = ApplicationContextProvider.getApplicationContext();
+                if (context != null) {
+                    hpr = context.getBean(Hpr.class);
+                }
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to get HprService bean", e);
+            }
+        }
+        return hpr;
+    }
 
     protected Practitioner(ObjectMapper objectMapper, WebClient webClient) {
         super(objectMapper, webClient);
